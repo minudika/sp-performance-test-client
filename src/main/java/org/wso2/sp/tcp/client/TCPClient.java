@@ -22,7 +22,6 @@ import org.apache.log4j.Logger;
 import org.wso2.extension.siddhi.io.tcp.transport.TCPNettyClient;
 import org.wso2.extension.siddhi.map.binary.sinkmapper.BinaryEventConverter;
 import org.wso2.siddhi.core.event.Event;
-//import org.wso2.siddhi.core.exception.ConnectionUnavailableException;
 import org.wso2.siddhi.core.exception.ConnectionUnavailableException;
 import org.wso2.siddhi.query.api.definition.Attribute;
 import org.wso2.sp.tcp.client.util.ClientConstants;
@@ -46,56 +45,59 @@ public class TCPClient {
     private static final Attribute.Type[] PERSISTING_TYPES = new Attribute.Type[]{
             Attribute.Type.LONG, Attribute.Type.BOOL, Attribute.Type.INT, Attribute.Type.DOUBLE,
             Attribute.Type.DOUBLE, Attribute.Type.FLOAT, Attribute.Type.DOUBLE};
+    private static final Attribute.Type[] PATTERN_TYPES = new Attribute.Type[] {
+            Attribute.Type.LONG, Attribute.Type.INT, Attribute.Type.LONG, Attribute.Type.DOUBLE,
+            Attribute.Type.DOUBLE, Attribute.Type.INT, Attribute.Type.DOUBLE, Attribute.Type.INT,
+            Attribute.Type.INT, Attribute.Type.INT, Attribute.Type.INT, Attribute.Type.INT, Attribute.Type.INT,
+            Attribute.Type.INT};
     private static final Logger logger = Logger.getLogger(TCPClient.class);
     private static long startTime = 0;
 
     private static final int DEFAULT_BATCH_SIZE = 1000;
     private static final int DEFAULT_BATCH_TIME = 1000;
     private static final String DEFAULT_HOST = "localhost";
-    private static final String DEFAULT_PORT = "9611";
     private static long interval;
     private static long duration;
     private static int batchSize;
+    private static int scenario;
+    private static String host;
+    private static int port;
 
     /**
      * Main method to start the test client
+     * Tested scenarios are identified by following ids.
      */
     public static void main(String[] args) {
         try {
-            String host = System.getProperty(ClientConstants.HOST, ClientConstants.DEFAULT_HOST);
-            int port = Integer.parseInt(System.getProperty(ClientConstants.PORT, ClientConstants.DEFAULT_PORT));
+            host = System.getProperty(ClientConstants.HOST, ClientConstants.DEFAULT_HOST);
+            port = Integer.parseInt(System.getProperty(ClientConstants.PORT, ClientConstants.DEFAULT_PORT));
             batchSize = Integer.parseInt(System.getProperty(ClientConstants.BATCH_SIZE, ClientConstants
                     .DEFAULT_BATCH_SIZE));
             interval = Long.parseLong(System.getProperty(ClientConstants.INTERVAL, ClientConstants
                     .DEFAULT_INTERVAL));
-            boolean isPersistingEnabled = Boolean.parseBoolean(System.getProperty(ClientConstants.PERSISTENCE_ENABLED,
-                    "false"));
+            scenario = Integer.parseInt(System.getProperty(ClientConstants.SCENARIO_TEXT,
+                    ClientConstants.DEFAULT_SCENARIO));
             duration = Long.parseLong(System.getProperty(ClientConstants.DURATION, ClientConstants
                     .DEFAULT_DURATION));
 
-            logger.info("**********************");
-            logger.info("Host : " + host);
-            logger.info("Port : " + port);
-            logger.info("Batch Size : " + batchSize);
-            logger.info("Time between batches : " + interval);
-            logger.info("Total duration : " + duration);
-            logger.info("Is a persisting scenario : " + isPersistingEnabled);
-            logger.info("**********************");
             TCPNettyClient tcpNettyClient = new TCPNettyClient();
             tcpNettyClient.connect(host, port);
-            logger.info("TCP client connected");
-            if (!isPersistingEnabled) {
-                publishPassthroughMessages(tcpNettyClient);
-            } else {
-                publishPersistingMessages(tcpNettyClient);
+            switch (scenario) {
+                case ClientConstants.SCENARIO_PASSTHROUGH:
+                case ClientConstants.SCENARIO_FILTER:
+                case ClientConstants.SCENARIO_WINDOW_LARGE:
+                case ClientConstants.SCENARIO_WINDOW_SMALL:
+                    publishPassthroughMessages(tcpNettyClient);
+                    break;
+                default:
+                    publishPersistingMessages(tcpNettyClient);
             }
-
             tcpNettyClient.disconnect();
             tcpNettyClient.shutdown();
-        } catch (ConnectionUnavailableException ex) {
-            logger.error(ex);
+        } catch (ConnectionUnavailableException e) {
+            logger.error(String.format("Failed to connect to %s:%d due to %s", host, port, e.getMessage()), e);
         } catch (IOException e) {
-            logger.error(e);
+            logger.error("Error occured during publishing messages : " + e.getMessage(), e);
         }
     }
 
@@ -130,6 +132,7 @@ public class TCPClient {
             logger.info("TCP client finished sending events");
             Thread.sleep(1000);
         } catch (InterruptedException e) {
+            logger.info("Error occured after publishing events : " + e.getMessage(), e);
         }
     }
 
@@ -156,8 +159,8 @@ public class TCPClient {
             if (currentTime - startTime <= interval) {
                 try {
                     Thread.sleep(interval - (currentTime - startTime));
-                } catch (InterruptedException ex) {
-                    logger.error(ex);
+                } catch (InterruptedException e) {
+                    logger.info("Error occured while publishing events : " + e.getMessage(), e);
                 }
             }
         }
@@ -165,6 +168,7 @@ public class TCPClient {
             logger.info("TCP client finished sending events");
             Thread.sleep(1000);
         } catch (InterruptedException e) {
+            logger.info("Error occured after publishing events : " + e.getMessage(), e);
         }
     }
 
