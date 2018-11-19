@@ -26,6 +26,8 @@ import org.wso2.siddhi.core.exception.ConnectionUnavailableException;
 import org.wso2.siddhi.query.api.definition.Attribute;
 import org.wso2.sp.tcp.client.util.ClientConstants;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -88,6 +90,9 @@ public class TCPClient {
                 case ClientConstants.SCENARIO_WINDOW_LARGE:
                 case ClientConstants.SCENARIO_WINDOW_SMALL:
                     publishPassthroughMessages(tcpNettyClient);
+                    break;
+                case ClientConstants.SCENARIO_PATTERNS:
+                    publishPatternMessages(tcpNettyClient);
                     break;
                 default:
                     publishPersistingMessages(tcpNettyClient);
@@ -155,6 +160,54 @@ public class TCPClient {
             }
             tcpNettyClient.send(STREAM_NAME, BinaryEventConverter.convertToBinaryMessage(
                     arrayList.toArray(new Event[0]), PERSISTING_TYPES).array());
+            long currentTime = System.currentTimeMillis();
+            if (currentTime - startTime <= interval) {
+                try {
+                    Thread.sleep(interval - (currentTime - startTime));
+                } catch (InterruptedException e) {
+                    logger.info("Error occured while publishing events : " + e.getMessage(), e);
+                }
+            }
+        }
+        try {
+            logger.info("TCP client finished sending events");
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {
+            logger.info("Error occured after publishing events : " + e.getMessage(), e);
+        }
+    }
+
+    private static void publishPatternMessages(TCPNettyClient tcpNettyClient) throws IOException {
+        Random rand = new Random();
+        long i = 0;
+        long startTime = System.currentTimeMillis();
+        String path = TCPClient.class.getClassLoader().getResource("data.csv").getFile();
+        BufferedReader reader = new BufferedReader(new FileReader(path));
+        while (System.currentTimeMillis() - startTime < duration) {
+            startTime = System.currentTimeMillis();
+            ArrayList<Event> arrayList = new ArrayList<Event>(batchSize);
+            for (int j = 0; j < batchSize; j++) {
+                Event event = new Event();
+                String line = reader.readLine();
+                String data[];
+                if (line != null) {
+                    data = line.split(",");
+                } else {
+                    reader.close();
+                    reader = new BufferedReader(new FileReader(path));
+                    data = reader.readLine().split(",");
+                }
+
+                event.setData(new Object[]{System.currentTimeMillis(), data[0], data[1], data[2], data[3], data[4],
+                        data[5], data[6], data[7], data[8], data[9], data[10], data[11], data[12], data[13]});
+
+                long time = System.currentTimeMillis();
+                if (time - startTime <= interval) {
+                    arrayList.add(event);
+                }
+            }
+            tcpNettyClient.send(STREAM_NAME, BinaryEventConverter.convertToBinaryMessage(
+                    arrayList.toArray(new Event[0]), PATTERN_TYPES).array());
             long currentTime = System.currentTimeMillis();
             if (currentTime - startTime <= interval) {
                 try {
